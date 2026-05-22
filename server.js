@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('dotenv').config({ path: '/etc/secrets/.env', override: true });
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
