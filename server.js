@@ -10,7 +10,7 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.ANBIMA_CLIENT_ID;
 const CLIENT_SECRET = process.env.ANBIMA_CLIENT_SECRET;
-const ANBIMA_AUTH_URL = 'https://auth.anbima.com.br/oauth/token';
+const ANBIMA_AUTH_URL = 'https://api.anbima.com.br/oauth/access-token';
 const ANBIMA_API_URL = 'https://api.anbima.com.br/feed/precos-indices/v2';
 
 let cachedToken = null;
@@ -21,22 +21,18 @@ async function getToken() {
     return cachedToken;
   }
   const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-  console.log('Tentando autenticar com CLIENT_ID:', CLIENT_ID ? CLIENT_ID.slice(0,4)+'...' : 'UNDEFINED');
+  console.log('Autenticando com CLIENT_ID:', CLIENT_ID ? CLIENT_ID.slice(0,4)+'...' : 'UNDEFINED');
   const res = await fetch(ANBIMA_AUTH_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'client_id': CLIENT_ID
+      'Content-Type': 'application/json'
     },
-    body: 'grant_type=client_credentials'
+    body: JSON.stringify({ grant_type: 'client_credentials' })
   });
   const responseText = await res.text();
-  console.log('Auth response status:', res.status);
-  console.log('Auth response:', responseText.slice(0, 300));
-  if (!res.ok) {
-    throw new Error(`Auth failed: ${responseText}`);
-  }
+  console.log('Auth status:', res.status, '— resposta:', responseText.slice(0,200));
+  if (!res.ok) throw new Error(`Auth failed: ${responseText}`);
   const data = JSON.parse(responseText);
   cachedToken = data.access_token;
   tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
@@ -59,17 +55,14 @@ app.post('/carteira', async (req, res) => {
         const { ticker, tipo } = ativo;
         const tipoPath = tipo === 'CRI' ? 'cri' : tipo === 'CRA' ? 'cra' : 'debentures';
         const cod = ticker.toUpperCase();
-        const headers = {
-          'Authorization': `Bearer ${token}`,
-          'client_id': CLIENT_ID
-        };
+        const headers = { 'Authorization': `Bearer ${token}`, 'client_id': CLIENT_ID };
         const [infoRes, agendaRes] = await Promise.all([
           fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}`, { headers }),
           fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}/agenda`, { headers })
         ]);
         const infoText = await infoRes.text();
         const agendaText = await agendaRes.text();
-        console.log(`[${cod}] status: ${infoRes.status} — ${infoText.slice(0,200)}`);
+        console.log(`[${cod}] status: ${infoRes.status} — ${infoText.slice(0,150)}`);
         const info = infoRes.ok ? JSON.parse(infoText) : null;
         const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
         return { ticker: cod, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
