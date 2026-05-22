@@ -21,7 +21,6 @@ async function getToken() {
     return cachedToken;
   }
   const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-  console.log('Autenticando com CLIENT_ID:', CLIENT_ID ? CLIENT_ID.slice(0,4)+'...' : 'UNDEFINED');
   const res = await fetch(ANBIMA_AUTH_URL, {
     method: 'POST',
     headers: {
@@ -31,7 +30,7 @@ async function getToken() {
     body: JSON.stringify({ grant_type: 'client_credentials' })
   });
   const responseText = await res.text();
-  console.log('Auth status:', res.status, '— resposta:', responseText.slice(0,200));
+  console.log('Auth status:', res.status);
   if (!res.ok) throw new Error(`Auth failed: ${responseText}`);
   const data = JSON.parse(responseText);
   cachedToken = data.access_token;
@@ -46,30 +45,32 @@ app.get('/', (req, res) => {
 app.post('/carteira', async (req, res) => {
   try {
     const { ativos } = req.body;
+    console.log('Ativos recebidos:', JSON.stringify(ativos));
     if (!ativos || !Array.isArray(ativos)) {
       return res.status(400).json({ error: 'Envie um array de ativos' });
     }
     const token = await getToken();
     const resultados = await Promise.allSettled(
-      ativos.map(async (ativo) => {
-        const { ticker, tipo } = ativo;
+      ativos.map(async (ativo, i) => {
+        const ticker = (ativo.ticker || ativo.code || '').toString().trim().toUpperCase();
+        const tipo = ativo.tipo || 'CRA';
+        if (!ticker) return { ticker: `ativo_${i}`, tipo, info: null, agenda: null, erro: 'Ticker vazio' };
         const tipoPath = tipo === 'CRI' ? 'cri' : tipo === 'CRA' ? 'cra' : 'debentures';
-        const cod = ticker.toUpperCase();
         const headers = { 'Authorization': `Bearer ${token}`, 'client_id': CLIENT_ID };
         const [infoRes, agendaRes] = await Promise.all([
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}`, { headers }),
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}/agenda`, { headers })
+          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker}`, { headers }),
+          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker}/agenda`, { headers })
         ]);
         const infoText = await infoRes.text();
         const agendaText = await agendaRes.text();
-        console.log(`[${cod}] status: ${infoRes.status} — ${infoText.slice(0,150)}`);
+        console.log(`[${ticker}] status: ${infoRes.status} — ${infoText.slice(0,150)}`);
         const info = infoRes.ok ? JSON.parse(infoText) : null;
         const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
-        return { ticker: cod, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
+        return { ticker, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
       })
     );
     const dados = resultados.map((r, i) =>
-      r.status === 'fulfilled' ? r.value : { ticker: ativos[i].ticker, erro: r.reason?.message }
+      r.status === 'fulfilled' ? r.value : { ticker: ativos[i]?.ticker || ativos[i]?.code || `ativo_${i}`, erro: r.reason?.message }
     );
     res.json({ ativos: dados });
   } catch (err) {
