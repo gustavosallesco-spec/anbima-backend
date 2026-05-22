@@ -10,8 +10,8 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.ANBIMA_CLIENT_ID;
 const CLIENT_SECRET = process.env.ANBIMA_CLIENT_SECRET;
-const ANBIMA_AUTH_URL = 'https://auth.sandbox.anbima.com.br/oauth/token';
-const ANBIMA_API_URL = 'https://api.sandbox.anbima.com.br/feed/precos-indices/v2';
+const ANBIMA_AUTH_URL = 'https://auth.anbima.com.br/oauth/token';
+const ANBIMA_API_URL = 'https://api.anbima.com.br/feed/precos-indices/v2';
 
 let cachedToken = null;
 let tokenExpiry = null;
@@ -21,6 +21,7 @@ async function getToken() {
     return cachedToken;
   }
   const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+  console.log('Tentando autenticar com CLIENT_ID:', CLIENT_ID ? CLIENT_ID.slice(0,4)+'...' : 'UNDEFINED');
   const res = await fetch(ANBIMA_AUTH_URL, {
     method: 'POST',
     headers: {
@@ -30,11 +31,13 @@ async function getToken() {
     },
     body: 'grant_type=client_credentials'
   });
+  const responseText = await res.text();
+  console.log('Auth response status:', res.status);
+  console.log('Auth response:', responseText.slice(0, 300));
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Auth failed: ${err}`);
+    throw new Error(`Auth failed: ${responseText}`);
   }
-  const data = await res.json();
+  const data = JSON.parse(responseText);
   cachedToken = data.access_token;
   tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
   return cachedToken;
@@ -66,7 +69,7 @@ app.post('/carteira', async (req, res) => {
         ]);
         const infoText = await infoRes.text();
         const agendaText = await agendaRes.text();
-        console.log(`[${cod}] info status: ${infoRes.status} — ${infoText.slice(0,200)}`);
+        console.log(`[${cod}] status: ${infoRes.status} — ${infoText.slice(0,200)}`);
         const info = infoRes.ok ? JSON.parse(infoText) : null;
         const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
         return { ticker: cod, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
