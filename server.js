@@ -10,8 +10,8 @@ app.use(express.json());
 
 const CLIENT_ID = process.env.ANBIMA_CLIENT_ID;
 const CLIENT_SECRET = process.env.ANBIMA_CLIENT_SECRET;
-const ANBIMA_AUTH_URL = 'https://auth.anbima.com.br/oauth/token';
-const ANBIMA_API_URL = 'https://api.anbima.com.br/feed/precos-indices/v2';
+const ANBIMA_AUTH_URL = 'https://auth.sandbox.anbima.com.br/oauth/token';
+const ANBIMA_API_URL = 'https://api.sandbox.anbima.com.br/feed/precos-indices/v2';
 
 let cachedToken = null;
 let tokenExpiry = null;
@@ -65,7 +65,7 @@ app.post('/carteira', async (req, res) => {
           fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}/agenda`, { headers })
         ]);
         const infoText = await infoRes.text();
-        const agendaText = agendaRes.text ? await agendaRes.text() : '';
+        const agendaText = await agendaRes.text();
         console.log(`[${cod}] info status: ${infoRes.status} — ${infoText.slice(0,200)}`);
         const info = infoRes.ok ? JSON.parse(infoText) : null;
         const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
