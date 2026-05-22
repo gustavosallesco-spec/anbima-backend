@@ -25,7 +25,8 @@ async function getToken() {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'client_id': CLIENT_ID
     },
     body: 'grant_type=client_credentials'
   });
@@ -49,22 +50,26 @@ app.post('/carteira', async (req, res) => {
     if (!ativos || !Array.isArray(ativos)) {
       return res.status(400).json({ error: 'Envie um array de ativos' });
     }
+    const token = await getToken();
     const resultados = await Promise.allSettled(
       ativos.map(async (ativo) => {
         const { ticker, tipo } = ativo;
         const tipoPath = tipo === 'CRI' ? 'cri' : tipo === 'CRA' ? 'cra' : 'debentures';
-        const token = await getToken();
+        const cod = ticker.toUpperCase();
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'client_id': CLIENT_ID
+        };
         const [infoRes, agendaRes] = await Promise.all([
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker.toUpperCase()}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker.toUpperCase()}/agenda`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
+          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}`, { headers }),
+          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${cod}/agenda`, { headers })
         ]);
-        const info = infoRes.ok ? await infoRes.json() : null;
-        const agenda = agendaRes.ok ? await agendaRes.json() : null;
-        return { ticker, tipo, info, agenda, erro: !infoRes.ok ? `${ticker} não encontrado` : null };
+        const infoText = await infoRes.text();
+        const agendaText = agendaRes.text ? await agendaRes.text() : '';
+        console.log(`[${cod}] info status: ${infoRes.status} — ${infoText.slice(0,200)}`);
+        const info = infoRes.ok ? JSON.parse(infoText) : null;
+        const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
+        return { ticker: cod, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
       })
     );
     const dados = resultados.map((r, i) =>
@@ -72,6 +77,7 @@ app.post('/carteira', async (req, res) => {
     );
     res.json({ ativos: dados });
   } catch (err) {
+    console.error('Erro geral:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
