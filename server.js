@@ -56,28 +56,4 @@ app.post('/carteira', async (req, res) => {
         const tipo = ativo.tipo || 'CRA';
         if (!ticker) return { ticker: `ativo_${i}`, tipo, info: null, agenda: null, erro: 'Ticker vazio' };
         const tipoPath = tipo === 'CRI' ? 'cri' : tipo === 'CRA' ? 'cra' : 'debentures';
-        const headers = { 'Authorization': `Bearer ${token}`, 'client_id': CLIENT_ID };
-        const [infoRes, agendaRes] = await Promise.all([
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker}`, { headers }),
-          fetch(`${ANBIMA_API_URL}/mercado-secundario/${tipoPath}/${ticker}/agenda`, { headers })
-        ]);
-        const infoText = await infoRes.text();
-        const agendaText = await agendaRes.text();
-        console.log(`[${ticker}] status: ${infoRes.status} — ${infoText.slice(0,150)}`);
-        const info = infoRes.ok ? JSON.parse(infoText) : null;
-        const agenda = agendaRes.ok ? JSON.parse(agendaText) : null;
-        return { ticker, tipo, info, agenda, erro: !infoRes.ok ? `${infoRes.status}: ${infoText.slice(0,100)}` : null };
-      })
-    );
-    const dados = resultados.map((r, i) =>
-      r.status === 'fulfilled' ? r.value : { ticker: ativos[i]?.ticker || ativos[i]?.code || `ativo_${i}`, erro: r.reason?.message }
-    );
-    res.json({ ativos: dados });
-  } catch (err) {
-    console.error('Erro geral:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+        const headers =
